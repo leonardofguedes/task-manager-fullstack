@@ -8,6 +8,7 @@ from app.domain.errors import NotFoundError, PermissionDeniedError, ValidationEr
 from app.domain.tasks import TaskStatus
 from app.domain.users import User
 from tests.fakes import (
+    BrokenDispatcher,
     FakeClock,
     FakeUnitOfWork,
     InMemoryTaskRepository,
@@ -188,3 +189,19 @@ def test_list_paginates_with_total(service: TaskService) -> None:
     assert len(page.items) == 5
     assert page.total == 25
     assert (page.limit, page.offset) == (10, 20)
+
+
+def test_broker_failure_after_commit_does_not_fail_the_request(
+    tasks: InMemoryTaskRepository, uow: FakeUnitOfWork, caplog: pytest.LogCaptureFixture
+) -> None:
+    users = InMemoryUserRepository()
+    for name in ("alice", "bob"):
+        users.add(User(None, f"{name}@example.com", name.title(), "x", NOW))
+    broken = BrokenDispatcher()
+    service = TaskService(tasks, users, uow, broken, FakeClock(NOW))
+
+    task = service.create(ALICE, TaskCreate(title="x", assignee_id=BOB))
+
+    assert task.id is not None and task.assignee_id == BOB
+    assert uow.commits == 1 and broken.attempts == 1
+    assert "notification" in caplog.text.lower()

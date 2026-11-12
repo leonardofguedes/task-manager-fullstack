@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import TypedDict
@@ -14,6 +15,8 @@ from app.application.ports import (
 )
 from app.domain.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.domain.tasks import Task, TaskStatus
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -134,4 +137,15 @@ class TaskService:
         if assignee is None or assignee in (previous_assignee, actor_id):
             return
         assert task.id is not None
-        self._dispatcher.task_assigned(task.id, assignee)
+        try:
+            self._dispatcher.task_assigned(task.id, assignee)
+        except Exception:
+            # The task is already committed: failing the request now would make the client
+            # retry and create a duplicate. A lost notification is the lesser evil (an
+            # outbox table would remove it entirely).
+            logger.warning(
+                "could not enqueue assignment notification task_id=%s assignee_id=%s",
+                task.id,
+                assignee,
+                exc_info=True,
+            )

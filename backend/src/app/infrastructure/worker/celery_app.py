@@ -10,13 +10,24 @@ settings = get_infra_settings()
 celery_app = Celery(
     "task_manager",
     broker=settings.redis_url,
-    backend=settings.redis_url,
     include=["app.infrastructure.worker.jobs"],
 )
 celery_app.conf.update(
     task_always_eager=settings.celery_task_always_eager,
+    task_ignore_result=True,  # nobody reads job return values: no result backend needed
     task_acks_late=True,  # a job is re-delivered if the worker dies mid-way
     worker_prefetch_multiplier=1,
+    # Fail fast when Redis is down instead of blocking the API request that enqueues.
+    broker_connection_timeout=2,
+    broker_transport_options={
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "max_retries": 1,  # kombu reconnect attempts when opening the publish channel
+        "interval_start": 0,
+        "interval_step": 0.5,
+        "interval_max": 1,
+    },
+    task_publish_retry_policy={"max_retries": 2, "interval_start": 0, "interval_step": 0.5},
     timezone="UTC",
     beat_schedule={
         "scan-overdue-tasks": {

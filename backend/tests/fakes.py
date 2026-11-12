@@ -152,3 +152,14 @@ class FakeTokenService:
         if not token.startswith(prefix) or not token[len(prefix) :].isdigit():
             raise AuthenticationError("invalid token")
         return int(token[len(prefix) :])
+
+
+@dataclass
+class BrokenDispatcher:
+    """Simulates the message broker being down at enqueue time."""
+
+    attempts: int = 0
+
+    def task_assigned(self, task_id: int, assignee_id: int) -> None:
+        self.attempts += 1
+        raise ConnectionError("broker unreachable")
