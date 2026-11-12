@@ -107,3 +107,15 @@ def test_mutators_touch_updated_at() -> None:
 
     task.assign(5, T2)
     assert task.assignee_id == 5
+
+
+def test_status_given_as_plain_string_is_coerced() -> None:
+    task = make_task(status="done")
+
+    assert task.status is TaskStatus.DONE
+    assert task.completed_at == T0
+
+
+def test_unknown_status_raises_validation() -> None:
+    with pytest.raises(ValidationError):
+        make_task(status="archived")

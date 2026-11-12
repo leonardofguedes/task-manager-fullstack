@@ -71,7 +71,11 @@ class Task:
         self.assignee_id = assignee_id
         self.updated_at = now
 
-    def change_status(self, status: TaskStatus, now: datetime) -> None:
+    def change_status(self, status: TaskStatus | str, now: datetime) -> None:
+        try:
+            status = TaskStatus(status)
+        except ValueError as exc:
+            raise ValidationError(f"unknown status: {status!r}") from exc
         if status is TaskStatus.DONE and self.completed_at is None:
             self.completed_at = now
         elif status is not TaskStatus.DONE:

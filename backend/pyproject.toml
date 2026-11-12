@@ -69,3 +69,4 @@ ignore_missing_imports = true
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "tests"]
+known-third-party = ["alembic"]
