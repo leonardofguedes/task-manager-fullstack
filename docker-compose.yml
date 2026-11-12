@@ -1,0 +1,78 @@
+# `docker compose up --build` starts the whole system.
+# Values come from `.env` when present (see .env.example); the defaults below are for local demo only.
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-taskmanager}:${POSTGRES_PASSWORD:-taskmanager}@db:5432/${POSTGRES_DB:-taskmanager}
+  REDIS_URL: redis://redis:6379/0
+  RATE_LIMIT_STORAGE_URI: redis://redis:6379/1
+  JWT_SECRET: ${JWT_SECRET:-local-demo-only-secret-change-me-0123456789}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+  OVERDUE_SCAN_MINUTES: ${OVERDUE_SCAN_MINUTES:-15}
+
+x-backend: &backend
+  build: ./backend
+  image: task-manager-backend
+  environment: *backend-env
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taskmanager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskmanager}
+      POSTGRES_DB: ${POSTGRES_DB:-taskmanager}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.seed &&
+             exec uvicorn app.api.main:create_app --factory --host 0.0.0.0 --port 8000
+             --proxy-headers --forwarded-allow-ips '*'"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    <<: *backend
+    command: celery -A app.infrastructure.worker.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      api:
+        condition: service_healthy
+
+  beat:
+    <<: *backend
+    command: celery -A app.infrastructure.worker.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

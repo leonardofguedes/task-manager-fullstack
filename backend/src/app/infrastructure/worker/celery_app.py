@@ -1,4 +1,7 @@
+from typing import Any
+
 from celery import Celery
+from celery.signals import beat_init
 
 from app.config import get_infra_settings
 
@@ -22,3 +25,9 @@ celery_app.conf.update(
         }
     },
 )
+
+
+@beat_init.connect  # type: ignore[untyped-decorator]
+def scan_once_on_startup(sender: Any, **_: Any) -> None:
+    """Interval schedules first fire after one interval; run one scan right away instead."""
+    sender.app.send_task("app.infrastructure.worker.jobs.scan_overdue_tasks")
