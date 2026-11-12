@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Protocol
 
@@ -31,7 +32,7 @@ class TaskRepository(Protocol):
 
     def list(self, filters: TaskFilters, page: PageParams) -> Page[Task]: ...
 
-    def list_overdue(self, today: date) -> list[Task]: ...
+    def list_overdue(self, today: date) -> builtins.list[Task]: ...
 
 
 class UserRepository(Protocol):

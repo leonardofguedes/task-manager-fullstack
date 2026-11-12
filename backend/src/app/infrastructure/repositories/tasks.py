@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from datetime import date
 
 from sqlalchemy import Select, func, select
@@ -56,7 +57,7 @@ class SqlTaskRepository:
             offset=page.offset,
         )
 
-    def list_overdue(self, today: date) -> list[Task]:
+    def list_overdue(self, today: date) -> builtins.list[Task]:
         rows = self._session.scalars(
             select(TaskModel)
             .where(TaskModel.due_date < today, TaskModel.status != TaskStatus.DONE.value)
@@ -65,7 +66,7 @@ class SqlTaskRepository:
         return [task_to_entity(r) for r in rows]
 
 
-def _apply_filters(query: Select[tuple[TaskModel]], f: TaskFilters) -> Select[tuple[TaskModel]]:
+def _apply_filters(query: Select[TaskModel], f: TaskFilters) -> Select[TaskModel]:
     if f.status is not None:
         query = query.where(TaskModel.status == f.status.value)
     if f.assignee_id is not None:
