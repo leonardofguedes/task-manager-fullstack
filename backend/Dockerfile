@@ -22,4 +22,5 @@ RUN useradd --create-home --uid 1000 appuser
 USER appuser
 
 EXPOSE 8000
-CMD ["uvicorn", "app.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Proxy headers are only trusted in docker-compose.yml, where the API sits behind nginx.
+CMD ["uvicorn", "app.api.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

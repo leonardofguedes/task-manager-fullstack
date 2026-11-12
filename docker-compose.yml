@@ -42,13 +42,18 @@ services:
 
   api:
     <<: *backend
-    command: >
-      sh -c "alembic upgrade head &&
-             python -m app.seed &&
-             exec uvicorn app.api.main:create_app --factory --host 0.0.0.0 --port 8000
-             --proxy-headers --forwarded-allow-ips '*'"
-    ports:
-      - "${API_PORT:-8000}:8000"
+    # Not published on the host: the only way in is through nginx (frontend service), which
+    # overwrites X-Forwarded-For with the real peer address. That is what makes trusting the
+    # proxy header safe, so per-IP rate limits cannot be bypassed by spoofing the header.
+    command:
+      - sh
+      - -c
+      - >-
+        alembic upgrade head && python -m app.seed &&
+        exec uvicorn app.api.main:create_app --factory --host 0.0.0.0 --port 8000
+        --proxy-headers --forwarded-allow-ips=*
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
