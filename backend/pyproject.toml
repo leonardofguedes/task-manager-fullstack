@@ -66,3 +66,6 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["celery.*", "slowapi.*", "kombu.*"]
 ignore_missing_imports = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
