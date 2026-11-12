@@ -11,13 +11,13 @@ dependencies = [
     "alembic>=1.20.1",
     "celery[redis]>=5.7.0",
     "fastapi>=0.162.5",
+    "limits>=4",
     "psycopg[binary]>=3.3.9",
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.16.2",
     "pydantic[email]>=2.14.3",
     "pyjwt>=2.15.1",
     "python-multipart>=0.0.33",
-    "slowapi>=0.1.10",
     "sqlalchemy>=2",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -64,7 +64,7 @@ packages = ["app"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "slowapi.*", "kombu.*"]
+module = ["celery.*", "kombu.*"]
 ignore_missing_imports = true
 
 [tool.ruff.lint.isort]

@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import register_error_handlers
+from app.api.rate_limit import RateLimiter, rate_limit
 from app.api.routers import auth, health, notifications, tasks, users
 from app.config import Settings, get_settings
 from app.infrastructure.db.session import make_engine, make_session_factory
@@ -24,8 +25,10 @@ def create_app(
         make_engine(settings.database_url)
     )
 
+    app.state.rate_limiter = RateLimiter(settings)
+
     register_error_handlers(app)
     app.include_router(health.router)
     for router in (auth.router, users.router, tasks.router, notifications.router):
-        app.include_router(router, prefix=API_PREFIX)
+        app.include_router(router, prefix=API_PREFIX, dependencies=[Depends(rate_limit("default"))])
     return app
