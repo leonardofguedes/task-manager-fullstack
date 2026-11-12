@@ -5,7 +5,7 @@ from app.config import Settings
 
 
 def test_health_returns_ok() -> None:
-    client = TestClient(create_app(Settings(jwt_secret="test", rate_limit_enabled=False)))
+    client = TestClient(create_app(Settings(jwt_secret="x" * 32, rate_limit_enabled=False)))
 
     response = client.get("/health")
 
