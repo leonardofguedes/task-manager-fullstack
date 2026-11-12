@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.application.auth_service import AuthService
 from app.application.ports import Clock, NotificationDispatcher
+from app.application.task_service import TaskService
 from app.config import Settings
 from app.domain.users import User
 from app.infrastructure.clock import SystemClock
+from app.infrastructure.repositories.tasks import SqlTaskRepository
 from app.infrastructure.repositories.uow import SqlUnitOfWork
 from app.infrastructure.repositories.users import SqlUserRepository
 from app.infrastructure.security.hashing import Argon2Hasher
@@ -66,3 +68,20 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], auth: AuthSe
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_task_service(
+    session: SessionDep,
+    clock: ClockDep,
+    dispatcher: Annotated[NotificationDispatcher, Depends(get_dispatcher)],
+) -> TaskService:
+    return TaskService(
+        SqlTaskRepository(session),
+        SqlUserRepository(session),
+        SqlUnitOfWork(session),
+        dispatcher,
+        clock,
+    )
+
+
+TaskServiceDep = Annotated[TaskService, Depends(get_task_service)]
