@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { TASK_STATUSES } from '../api/types'
@@ -19,6 +19,7 @@ import {
   useUpdateTask,
 } from '../hooks/useTasks'
 import { useUsers } from '../hooks/useUsers'
+import { clampPage } from '../lib/pagination'
 
 const PAGE_SIZE = 10
 const VALID_STATUSES = new Set<string>(TASK_STATUSES.map((s) => s.value))
@@ -54,14 +55,24 @@ export default function TasksPage() {
   const [dialog, setDialog] = useState<DialogState>({ mode: 'closed' })
   const [actionError, setActionError] = useState<string | null>(null)
 
-  function setQuery(next: Filters, nextPage = 1) {
+  function setQuery(next: Filters, nextPage = 1, replace = false) {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(next)) {
       if (value !== undefined && value !== '') params.set(key, String(value))
     }
     if (nextPage > 1) params.set('page', String(nextPage))
-    setSearchParams(params)
+    setSearchParams(params, { replace })
   }
+
+  // After a delete/complete the current page can become empty (or the URL can point past the
+  // end): move to the last page that has results instead of showing an empty list.
+  const total = tasks.data?.total
+  useEffect(() => {
+    if (total === undefined || tasks.isPlaceholderData) return
+    const valid = clampPage(page, total, PAGE_SIZE)
+    if (valid !== page) setQuery(filters, valid, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setQuery is recreated each render
+  }, [total, page, filters, tasks.isPlaceholderData])
 
   function closeDialog() {
     createTask.reset()

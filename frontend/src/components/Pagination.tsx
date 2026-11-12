@@ -1,3 +1,5 @@
+import { pageCount as countPages } from '../lib/pagination'
+
 interface Props {
   page: number // 1-based
   pageSize: number
@@ -10,7 +12,7 @@ const buttonClass =
   'hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50'
 
 export default function Pagination({ page, pageSize, total, onPageChange }: Props) {
-  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const pageCount = countPages(total, pageSize)
   return (
     <nav aria-label="Pagination" className="flex items-center justify-between gap-3">
       <button
