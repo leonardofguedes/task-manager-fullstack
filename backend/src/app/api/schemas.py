@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.domain.notifications import NotificationKind
 from app.domain.tasks import Task, TaskStatus
 
 
@@ -85,3 +86,13 @@ class TaskPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    task_id: int
+    kind: NotificationKind
+    message: str
+    created_at: datetime

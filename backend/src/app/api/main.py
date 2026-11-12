@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.errors import register_error_handlers
-from app.api.routers import auth, health, tasks, users
+from app.api.routers import auth, health, notifications, tasks, users
 from app.config import Settings, get_settings
 from app.infrastructure.db.session import make_engine, make_session_factory
 
@@ -26,6 +26,6 @@ def create_app(
 
     register_error_handlers(app)
     app.include_router(health.router)
-    for router in (auth.router, users.router, tasks.router):
+    for router in (auth.router, users.router, tasks.router, notifications.router):
         app.include_router(router, prefix=API_PREFIX)
     return app
