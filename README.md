@@ -19,8 +19,8 @@ docker compose up --build
 | What | URL |
 |---|---|
 | Web app | http://localhost:5173 |
-| API docs (Swagger UI) | http://localhost:8000/docs |
-| Health check | http://localhost:8000/health |
+| API docs (Swagger UI) | http://localhost:5173/docs |
+| Health check | http://localhost:5173/health |
 
 **Demo credentials** (seeded automatically on first start):
 
@@ -31,7 +31,9 @@ docker compose up --build
 
 The seed creates 12 tasks across all statuses, some overdue and some assigned between Alice and Bob. Log in as Alice, assign a task to Bob, then log in as Bob to see the notification.
 
-Everything works without configuration. To override the demo defaults (database password, `JWT_SECRET`, host ports), copy `.env.example` to `.env` and edit it. **Set a real `JWT_SECRET` for anything beyond a local demo.** If port 8000 or 5173 is already taken on your machine, set `API_PORT` or `FRONTEND_PORT`.
+Everything works without configuration. To override the demo defaults (database password, `JWT_SECRET`, host port), copy `.env.example` to `.env` and edit it. **Set a real `JWT_SECRET` for anything beyond a local demo.** If port 5173 is already taken on your machine, set `FRONTEND_PORT`.
+
+The API container is not published on the host: nginx is the single entry point (the SPA, `/api`, `/docs`, `/health`). This is what lets the API trust `X-Forwarded-For`, because nginx overwrites it with the real peer address, so per-IP rate limits cannot be spoofed.
 
 To stop and wipe the demo database: `docker compose down -v`.
 
@@ -70,7 +72,7 @@ The frontend keeps each kind of state where it belongs: **server state** in TanS
 
 ## API overview
 
-All endpoints are under `/api/v1`, documented at `/docs`. In Swagger, click **Authorize** and use your email as the username.
+All endpoints are under `/api/v1`, documented at `/docs`. Ids outside `1..2^31-1` are rejected with 422 (they cannot exist in the database). In Swagger, click **Authorize** and use your email as the username.
 
 | Method | Path | Description |
 |---|---|---|
@@ -98,12 +100,12 @@ All endpoints are under `/api/v1`, documented at `/docs`. In Swagger, click **Au
 |---|---|
 | FastAPI over Django | It keeps the domain free of ORM coupling, which is the Clean Architecture criterion. `Depends` gives dependency injection, and OpenAPI comes for free. |
 | Sync SQLAlchemy 2.0 + Alembic | Simpler to test and to share with Celery, which is sync. Async brings no benefit at this scale, and the repositories isolate the choice. |
-| Unit of Work, **commit before enqueue** | The Celery job is enqueued only after the transaction commits, so the worker never reads an uncommitted row. The next step would be a transactional outbox. |
+| Unit of Work, **commit before enqueue** | The Celery job is enqueued only after the transaction commits, so the worker never reads an uncommitted row. If the broker is down at that moment, the request still succeeds (the task is saved, the failure is logged) instead of a 500 that would make the client retry and duplicate the task. The next step would be a transactional outbox. |
 | JWT access token (HS256, 60 min), Argon2id passwords | Meets the JWT requirement with a minimal surface. The secret must be ≥ 32 bytes, enforced at startup. |
 | `limit`/`offset` pagination with `total` | Lets the UI show "page X of Y". Keyset pagination is the path for very large tables. |
 | `due_date` is a calendar `date`, timestamps are UTC | A due date is a day, not an instant. This avoids timezone off-by-one bugs. |
 | Rate limiting via `limits` + Redis | 100 req/min per IP on the API and 5 req/min on login/register. Counters are shared by all API replicas. Implemented as a dependency because slowapi's decorators bind config at import time. |
-| Celery worker + beat | Assignment notifications are event-driven. Overdue detection is scheduled, idempotent, and also runs once at startup. |
+| Celery worker + beat | Assignment notifications are event-driven. Overdue detection is scheduled, skips tasks already notified, and also runs once at startup. There is no result backend, because nobody reads job results. |
 | Tests: fakes for use cases, SQLite for integration | Fast feedback for TDD. Postgres-only behaviour is covered by the Docker run. |
 
 More detail, including the trade-offs, is in [PRESENTATION.md](PRESENTATION.md).
@@ -138,7 +140,7 @@ npm run dev        # http://localhost:5173, proxies /api to http://localhost:800
 ## Tests and quality gates
 
 ```bash
-cd backend && uv run pytest          # 105 tests, coverage gate 80% (currently ~97%)
+cd backend && uv run pytest          # 117 tests, coverage gate 80% (currently ~97%)
 cd backend && uv run mypy            # strict mode
 cd backend && uv run ruff check . && uv run ruff format --check .
 cd frontend && npm test -- --run     # Vitest + Testing Library
@@ -156,7 +158,9 @@ cd frontend && npm run lint && npm run build
 
 - No refresh tokens or token revocation. Next: short-lived access token, rotating refresh token in an httpOnly cookie, and a `jti` denylist in Redis.
 - The token is stored in `localStorage`. React escapes output and there is no `dangerouslySetInnerHTML`, but an httpOnly cookie would remove the XSS exposure.
-- Enqueueing after commit can still lose a notification if Redis is down at that exact moment. A transactional outbox would guarantee delivery.
+- If Redis is down when a task is assigned, the task is saved and the failure is logged, but that notification is lost. A transactional outbox would guarantee delivery.
+- The overdue scan avoids duplicates with a check-then-insert, which is safe with the single Beat scheduler used here. A unique index on `(task_id, kind)` would make it race-proof with concurrent scans.
+- SQLite (local dev and tests) does not enforce foreign keys unless enabled, so cascade deletes behave as on PostgreSQL only in Docker.
 - Notifications use 30-second polling. WebSockets or SSE would make them real-time.
 - "Overdue" uses the UTC date. Per-user timezones would make it exact around midnight.
 - Integration tests run on SQLite. Testcontainers would run them on PostgreSQL in CI.
