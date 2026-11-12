@@ -1,9 +1,14 @@
 from datetime import date, datetime
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
+from app.domain.ids import MAX_ID, MIN_ID
 from app.domain.notifications import NotificationKind
 from app.domain.tasks import Task, TaskStatus
+
+# Any id outside the database's integer range cannot exist: reject it as a validation error.
+EntityId = Annotated[int, Field(ge=MIN_ID, le=MAX_ID)]
 
 
 class UserRegister(BaseModel):
@@ -29,7 +34,7 @@ class TaskIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     due_date: date | None = None
-    assignee_id: int | None = None
+    assignee_id: EntityId | None = None
     status: TaskStatus = TaskStatus.TODO
 
 
@@ -39,7 +44,7 @@ class TaskPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     due_date: date | None = None
-    assignee_id: int | None = None
+    assignee_id: EntityId | None = None
     status: TaskStatus | None = None
 
     @model_validator(mode="after")

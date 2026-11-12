@@ -213,3 +213,35 @@ def test_is_overdue_flag(client: TestClient, alice: dict[str, str]) -> None:
 
     assert late["is_overdue"] is True
     assert future["is_overdue"] is False
+
+
+INT32_OVERFLOW = 2**31  # first value Postgres INTEGER cannot hold
+INT64_OVERFLOW = 2**63
+
+
+@pytest.mark.parametrize("bad_id", [0, INT32_OVERFLOW, INT64_OVERFLOW])
+def test_out_of_range_task_id_is_422_not_500(
+    client: TestClient, alice: dict[str, str], bad_id: int
+) -> None:
+    assert client.get(f"{TASKS}/{bad_id}", headers=alice).status_code == 422
+    assert client.delete(f"{TASKS}/{bad_id}", headers=alice).status_code == 422
+    assert client.post(f"{TASKS}/{bad_id}/complete", headers=alice).status_code == 422
+    patch = client.patch(f"{TASKS}/{bad_id}", json={"title": "x"}, headers=alice)
+    assert patch.status_code == 422
+
+
+@pytest.mark.parametrize("bad_id", [0, INT32_OVERFLOW, INT64_OVERFLOW])
+def test_out_of_range_assignee_is_422_not_500(
+    client: TestClient, alice: dict[str, str], bad_id: int
+) -> None:
+    task = create(client, alice)
+
+    created = client.post(TASKS, json={"title": "x", "assignee_id": bad_id}, headers=alice)
+    patched = client.patch(f"{TASKS}/{task['id']}", json={"assignee_id": bad_id}, headers=alice)
+    listed = client.get(TASKS, params={"assignee_id": bad_id}, headers=alice)
+
+    assert (created.status_code, patched.status_code, listed.status_code) == (422, 422, 422)
+
+
+def test_huge_offset_is_422_not_500(client: TestClient, alice: dict[str, str]) -> None:
+    assert client.get(TASKS, params={"offset": INT64_OVERFLOW}, headers=alice).status_code == 422

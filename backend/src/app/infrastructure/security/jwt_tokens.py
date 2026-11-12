@@ -4,6 +4,7 @@ import jwt
 
 from app.application.ports import Clock
 from app.domain.errors import AuthenticationError
+from app.domain.ids import MAX_ID, MIN_ID
 
 
 class JwtTokenService:
@@ -29,6 +30,9 @@ class JwtTokenService:
                 algorithms=[self._algorithm],
                 options={"require": ["sub", "exp"]},
             )
-            return int(payload["sub"])
+            user_id = int(payload["sub"])
         except (jwt.PyJWTError, ValueError) as exc:
             raise AuthenticationError("invalid or expired token") from exc
+        if not MIN_ID <= user_id <= MAX_ID:
+            raise AuthenticationError("invalid or expired token")
+        return user_id

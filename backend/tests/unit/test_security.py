@@ -72,3 +72,15 @@ def test_jwt_rejects_none_algorithm() -> None:
 
     with pytest.raises(AuthenticationError):
         make_service(FakeClock(NOW)).decode(token)
+
+
+@pytest.mark.parametrize("sub", ["0", "-5", str(2**31), str(2**70)])
+def test_jwt_subject_outside_id_range_raises(sub: str) -> None:
+    token = jwt.encode(
+        {"sub": sub, "exp": datetime.now(UTC) + timedelta(minutes=5)},
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(AuthenticationError):
+        make_service(FakeClock(NOW)).decode(token)
