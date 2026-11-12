@@ -131,7 +131,7 @@ class TaskService:
     ) -> None:
         # Called only after commit, so the worker never races an uncommitted row.
         assignee = task.assignee_id
-        if assignee is None or assignee == previous_assignee or assignee == actor_id:
+        if assignee is None or assignee in (previous_assignee, actor_id):
             return
         assert task.id is not None
         self._dispatcher.task_assigned(task.id, assignee)
