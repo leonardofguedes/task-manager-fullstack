@@ -8,11 +8,15 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.application.auth_service import AuthService
+from app.application.notification_service import NotificationService
 from app.application.ports import Clock, NotificationDispatcher
 from app.application.task_service import TaskService
+from app.application.user_service import UserService
 from app.config import Settings
+from app.domain.ids import persisted_id
 from app.domain.users import User
 from app.infrastructure.clock import SystemClock
+from app.infrastructure.repositories.notifications import SqlNotificationRepository
 from app.infrastructure.repositories.tasks import SqlTaskRepository
 from app.infrastructure.repositories.uow import SqlUnitOfWork
 from app.infrastructure.repositories.users import SqlUserRepository
@@ -68,6 +72,33 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], auth: AuthSe
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_current_user_id(user: CurrentUser) -> int:
+    return persisted_id(user.id)
+
+
+CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+
+
+def get_user_service(session: SessionDep) -> UserService:
+    return UserService(SqlUserRepository(session))
+
+
+UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+
+
+def get_notification_service(session: SessionDep, clock: ClockDep) -> NotificationService:
+    return NotificationService(
+        SqlTaskRepository(session),
+        SqlUserRepository(session),
+        SqlNotificationRepository(session),
+        SqlUnitOfWork(session),
+        clock,
+    )
+
+
+NotificationServiceDep = Annotated[NotificationService, Depends(get_notification_service)]
 
 
 def get_task_service(

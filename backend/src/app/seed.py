@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.application.auth_service import AuthService
 from app.application.ports import Clock, PasswordHasher
 from app.application.task_service import TaskCreate, TaskService
+from app.domain.ids import persisted_id
 from app.domain.tasks import TaskStatus
 from app.infrastructure.repositories.tasks import SqlTaskRepository
 from app.infrastructure.repositories.uow import SqlUnitOfWork
@@ -43,23 +44,23 @@ def seed(session_factory: sessionmaker[Session], hasher: PasswordHasher, clock: 
         auth = AuthService(users, uow, hasher, _NoTokens(), clock)
         alice = auth.register("alice@example.com", DEMO_PASSWORD, "Alice Martins")
         bob = auth.register("bob@example.com", DEMO_PASSWORD, "Bob Silva")
-        assert alice.id is not None and bob.id is not None
+        alice_id, bob_id = persisted_id(alice.id), persisted_id(bob.id)
 
         tasks = TaskService(SqlTaskRepository(session), users, uow, _NoDispatch(), clock)
         today = clock.today()
         demo: list[tuple[int, str, TaskStatus, int | None, int | None]] = [
-            (alice.id, "Set up CI pipeline", TaskStatus.DONE, -6, bob.id),
-            (alice.id, "Write API documentation", TaskStatus.IN_PROGRESS, 2, None),
-            (alice.id, "Review pull request #42", TaskStatus.TODO, -2, bob.id),
-            (alice.id, "Plan next sprint", TaskStatus.TODO, 5, None),
-            (alice.id, "Fix login rate limit bug", TaskStatus.TODO, -1, None),
-            (alice.id, "Prepare demo for stakeholders", TaskStatus.TODO, 10, bob.id),
-            (bob.id, "Design database indexes", TaskStatus.DONE, -3, None),
-            (bob.id, "Add pagination to task list", TaskStatus.IN_PROGRESS, 1, alice.id),
-            (bob.id, "Update dependencies", TaskStatus.TODO, 14, None),
-            (bob.id, "Investigate slow query", TaskStatus.TODO, -4, alice.id),
-            (bob.id, "Write onboarding guide", TaskStatus.TODO, None, None),
-            (bob.id, "Refactor notification worker", TaskStatus.IN_PROGRESS, 7, None),
+            (alice_id, "Set up CI pipeline", TaskStatus.DONE, -6, bob_id),
+            (alice_id, "Write API documentation", TaskStatus.IN_PROGRESS, 2, None),
+            (alice_id, "Review pull request #42", TaskStatus.TODO, -2, bob_id),
+            (alice_id, "Plan next sprint", TaskStatus.TODO, 5, None),
+            (alice_id, "Fix login rate limit bug", TaskStatus.TODO, -1, None),
+            (alice_id, "Prepare demo for stakeholders", TaskStatus.TODO, 10, bob_id),
+            (bob_id, "Design database indexes", TaskStatus.DONE, -3, None),
+            (bob_id, "Add pagination to task list", TaskStatus.IN_PROGRESS, 1, alice_id),
+            (bob_id, "Update dependencies", TaskStatus.TODO, 14, None),
+            (bob_id, "Investigate slow query", TaskStatus.TODO, -4, alice_id),
+            (bob_id, "Write onboarding guide", TaskStatus.TODO, None, None),
+            (bob_id, "Refactor notification worker", TaskStatus.IN_PROGRESS, 7, None),
         ]
         for owner, title, status, due_in, assignee in demo:
             tasks.create(

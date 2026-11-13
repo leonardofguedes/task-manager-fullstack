@@ -14,6 +14,7 @@ from app.application.ports import (
     UserRepository,
 )
 from app.domain.errors import NotFoundError, PermissionDeniedError, ValidationError
+from app.domain.ids import persisted_id
 from app.domain.tasks import Task, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -136,9 +137,8 @@ class TaskService:
         assignee = task.assignee_id
         if assignee is None or assignee in (previous_assignee, actor_id):
             return
-        assert task.id is not None
         try:
-            self._dispatcher.task_assigned(task.id, assignee)
+            self._dispatcher.task_assigned(persisted_id(task.id), assignee)
         except Exception:
             # The task is already committed: failing the request now would make the client
             # retry and create a duplicate. A lost notification is the lesser evil (an

@@ -20,7 +20,8 @@ STATUS_BY_ERROR: dict[type[DomainError], int] = {
 
 
 async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, DomainError)
+    if not isinstance(exc, DomainError):  # registered for DomainError only
+        raise exc
     code = next(
         (code for cls, code in STATUS_BY_ERROR.items() if isinstance(exc, cls)),
         status.HTTP_400_BAD_REQUEST,

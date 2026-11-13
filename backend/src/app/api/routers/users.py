@@ -1,8 +1,7 @@
 from fastapi import APIRouter
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, UserServiceDep
 from app.api.schemas import UserOut
-from app.infrastructure.repositories.users import SqlUserRepository
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -13,6 +12,6 @@ def me(user: CurrentUser) -> UserOut:
 
 
 @router.get("")
-def list_users(_: CurrentUser, session: SessionDep) -> list[UserOut]:
+def list_users(_: CurrentUser, users: UserServiceDep) -> list[UserOut]:
     """All users, used by the frontend to pick an assignee."""
-    return [UserOut.model_validate(u) for u in SqlUserRepository(session).list_all()]
+    return [UserOut.model_validate(u) for u in users.list_all()]

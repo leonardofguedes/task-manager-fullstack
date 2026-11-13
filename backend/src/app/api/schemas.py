@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from app.domain.ids import MAX_ID, MIN_ID
+from app.domain.ids import MAX_ID, MIN_ID, persisted_id
 from app.domain.notifications import NotificationKind
 from app.domain.tasks import Task, TaskStatus
 
@@ -70,9 +70,8 @@ class TaskOut(BaseModel):
 
     @classmethod
     def from_entity(cls, task: Task, today: date) -> "TaskOut":
-        assert task.id is not None
         return cls(
-            id=task.id,
+            id=persisted_id(task.id),
             title=task.title,
             description=task.description,
             status=task.status,

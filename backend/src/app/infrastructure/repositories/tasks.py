@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.application.pagination import Page, PageParams
 from app.application.task_service import TaskFilters
+from app.domain.ids import persisted_id
 from app.domain.tasks import Task, TaskStatus
 from app.infrastructure.db.mappers import copy_task_to_row, task_to_entity
 from app.infrastructure.db.models import TaskModel
@@ -30,8 +31,7 @@ class SqlTaskRepository:
         return task_to_entity(row) if row else None
 
     def update(self, task: Task) -> Task:
-        assert task.id is not None
-        row = self._session.get_one(TaskModel, task.id)
+        row = self._session.get_one(TaskModel, persisted_id(task.id))
         copy_task_to_row(task, row)
         self._session.flush()
         return task_to_entity(row)

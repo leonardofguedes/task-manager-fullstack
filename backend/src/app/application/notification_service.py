@@ -5,6 +5,7 @@ from app.application.ports import (
     UnitOfWork,
     UserRepository,
 )
+from app.domain.ids import persisted_id
 from app.domain.notifications import Notification, NotificationKind
 
 
@@ -47,14 +48,14 @@ class NotificationService:
         """Create one OVERDUE notification per overdue task (idempotent). Returns how many."""
         created = 0
         for task in self._tasks.list_overdue(self._clock.today()):
-            assert task.id is not None and task.due_date is not None
-            if self._notifications.exists(task.id, NotificationKind.OVERDUE):
+            task_id = persisted_id(task.id)
+            if self._notifications.exists(task_id, NotificationKind.OVERDUE):
                 continue
             self._notifications.add(
                 Notification(
                     id=None,
                     user_id=task.assignee_id or task.owner_id,
-                    task_id=task.id,
+                    task_id=task_id,
                     kind=NotificationKind.OVERDUE,
                     message=f'Task "{task.title}" is overdue (due {task.due_date:%Y-%m-%d})',
                     created_at=self._clock.now(),

@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response, status
 
-from app.api.deps import ClockDep, CurrentUser, TaskServiceDep
+from app.api.deps import ClockDep, CurrentUserId, TaskServiceDep
 from app.api.schemas import TaskIn, TaskOut, TaskPage, TaskPatch
 from app.application.pagination import PageParams
 from app.application.task_service import TaskChanges, TaskCreate, TaskFilters
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @router.get("")
 def list_tasks(
-    user: CurrentUser,
+    user_id: CurrentUserId,
     service: TaskServiceDep,
     clock: ClockDep,
     status_: Annotated[TaskStatus | None, Query(alias="status")] = None,
@@ -28,9 +28,8 @@ def list_tasks(
     offset: Annotated[int, Query(ge=0, le=MAX_ID)] = 0,
 ) -> TaskPage:
     """List tasks ordered by due date (tasks without a due date last)."""
-    assert user.id is not None
     page = service.list(
-        user.id,
+        user_id,
         TaskFilters(
             status=status_, due_after=due_after, due_before=due_before, assignee_id=assignee_id
         ),
@@ -47,42 +46,41 @@ def list_tasks(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_task(
-    payload: TaskIn, user: CurrentUser, service: TaskServiceDep, clock: ClockDep
+    payload: TaskIn, user_id: CurrentUserId, service: TaskServiceDep, clock: ClockDep
 ) -> TaskOut:
-    assert user.id is not None
-    task = service.create(user.id, TaskCreate(**payload.model_dump()))
+    task = service.create(user_id, TaskCreate(**payload.model_dump()))
     return TaskOut.from_entity(task, clock.today())
 
 
 @router.get("/{task_id}")
 def get_task(
-    task_id: TaskId, user: CurrentUser, service: TaskServiceDep, clock: ClockDep
+    task_id: TaskId, user_id: CurrentUserId, service: TaskServiceDep, clock: ClockDep
 ) -> TaskOut:
-    assert user.id is not None
-    return TaskOut.from_entity(service.get(user.id, task_id), clock.today())
+    return TaskOut.from_entity(service.get(user_id, task_id), clock.today())
 
 
 @router.patch("/{task_id}")
 def update_task(
-    task_id: TaskId, payload: TaskPatch, user: CurrentUser, service: TaskServiceDep, clock: ClockDep
+    task_id: TaskId,
+    payload: TaskPatch,
+    user_id: CurrentUserId,
+    service: TaskServiceDep,
+    clock: ClockDep,
 ) -> TaskOut:
     """Owner or assignee only. Omitted fields are kept; `null` clears a nullable field."""
-    assert user.id is not None
     changes: TaskChanges = payload.model_dump(exclude_unset=True)  # type: ignore[assignment]
-    return TaskOut.from_entity(service.update(user.id, task_id, changes), clock.today())
+    return TaskOut.from_entity(service.update(user_id, task_id, changes), clock.today())
 
 
 @router.post("/{task_id}/complete")
 def complete_task(
-    task_id: TaskId, user: CurrentUser, service: TaskServiceDep, clock: ClockDep
+    task_id: TaskId, user_id: CurrentUserId, service: TaskServiceDep, clock: ClockDep
 ) -> TaskOut:
-    assert user.id is not None
-    return TaskOut.from_entity(service.complete(user.id, task_id), clock.today())
+    return TaskOut.from_entity(service.complete(user_id, task_id), clock.today())
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: TaskId, user: CurrentUser, service: TaskServiceDep) -> Response:
+def delete_task(task_id: TaskId, user_id: CurrentUserId, service: TaskServiceDep) -> Response:
     """Owner only."""
-    assert user.id is not None
-    service.delete(user.id, task_id)
+    service.delete(user_id, task_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
