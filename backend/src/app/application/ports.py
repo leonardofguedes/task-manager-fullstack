@@ -62,6 +62,10 @@ class PasswordHasher(Protocol):
 
     def verify(self, plain: str, hashed: str) -> bool: ...
 
+    def verify_dummy(self, plain: str) -> None:
+        """Do the same work as `verify` against a throwaway hash (for unknown emails)."""
+        ...
+
 
 class TokenService(Protocol):
     def issue(self, user_id: int) -> str: ...

@@ -27,6 +27,14 @@ def test_argon2_roundtrip() -> None:
     assert not hasher.verify("wrong", hashed)
 
 
+def test_argon2_dummy_check_uses_a_real_argon2_hash() -> None:
+    # Unknown emails are checked against this hash so login takes the same time either way.
+    hasher = Argon2Hasher()
+
+    assert hasher.dummy_hash.startswith("$argon2id$")
+    assert hasher.verify_dummy("anything") is None
+
+
 def test_jwt_roundtrip() -> None:
     service = make_service(FakeClock(datetime.now(UTC)))
 

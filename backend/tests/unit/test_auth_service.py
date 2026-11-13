@@ -78,3 +78,14 @@ def test_resolve_token_of_deleted_user_raises(
 
     with pytest.raises(AuthenticationError):
         service.resolve_user(token)
+
+
+def test_login_unknown_email_still_runs_one_password_check(users: InMemoryUserRepository) -> None:
+    # Skipping the hash check for unknown emails would make them answer faster (enumeration).
+    hasher = PlainHasher()
+    service = AuthService(users, FakeUnitOfWork(), hasher, FakeTokenService(), FakeClock(NOW))
+
+    with pytest.raises(AuthenticationError):
+        service.login("nobody@example.com", "whatever-pass")
+
+    assert hasher.checks == 1

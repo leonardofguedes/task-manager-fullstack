@@ -1,5 +1,6 @@
 from app.application.ports import Clock, PasswordHasher, TokenService, UnitOfWork, UserRepository
 from app.domain.errors import AuthenticationError, ConflictError, ValidationError
+from app.domain.ids import persisted_id
 from app.domain.users import User
 
 PASSWORD_MIN_LENGTH = 8
@@ -44,11 +45,15 @@ class AuthService:
 
     def login(self, email: str, password: str) -> str:
         user = self._users.get_by_email(_normalize_email(email))
-        # Same error for unknown email and wrong password: no user enumeration.
-        if user is None or not self._hasher.verify(password, user.password_hash):
+        # Same error and the same hashing work for an unknown email and a wrong password, so
+        # neither the message nor the response time reveals which emails are registered.
+        # (Registration still answers 409 for a taken email; it is rate limited instead.)
+        if user is None:
+            self._hasher.verify_dummy(password)
             raise AuthenticationError(INVALID_CREDENTIALS)
-        assert user.id is not None
-        return self._tokens.issue(user.id)
+        if not self._hasher.verify(password, user.password_hash):
+            raise AuthenticationError(INVALID_CREDENTIALS)
+        return self._tokens.issue(persisted_id(user.id))
 
     def resolve_user(self, token: str) -> User:
         user = self._users.get(self._tokens.decode(token))

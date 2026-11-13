@@ -136,11 +136,18 @@ class RecordingDispatcher:
 
 
 class PlainHasher:
+    def __init__(self) -> None:
+        self.checks = 0  # real and dummy verifications, to assert constant work per login
+
     def hash(self, plain: str) -> str:
         return f"hashed:{plain}"
 
     def verify(self, plain: str, hashed: str) -> bool:
+        self.checks += 1
         return hashed == f"hashed:{plain}"
+
+    def verify_dummy(self, plain: str) -> None:
+        self.checks += 1
 
 
 class FakeTokenService:
