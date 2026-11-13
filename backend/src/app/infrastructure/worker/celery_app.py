@@ -15,7 +15,9 @@ celery_app = Celery(
 celery_app.conf.update(
     task_always_eager=settings.celery_task_always_eager,
     task_ignore_result=True,  # nobody reads job return values: no result backend needed
-    task_acks_late=True,  # a job is re-delivered if the worker dies mid-way
+    # Ack on receipt (at-most-once) by default: re-running the assignment job after a crash
+    # would duplicate the notification. The overdue scan opts into acks_late (safe to rerun).
+    task_acks_late=False,
     worker_prefetch_multiplier=1,
     # Fail fast when Redis is down instead of blocking the API request that enqueues.
     broker_connection_timeout=2,

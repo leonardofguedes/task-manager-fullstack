@@ -55,7 +55,7 @@ def send_assignment_notification(task_id: int, assignee_id: int) -> bool:
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
-    autoretry_for=(OperationalError,), max_retries=3, retry_backoff=True
+    autoretry_for=(OperationalError,), max_retries=3, retry_backoff=True, acks_late=True
 )
 def scan_overdue_tasks() -> int:
     with notification_service() as service:
