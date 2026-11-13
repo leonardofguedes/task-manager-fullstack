@@ -97,6 +97,7 @@ export default function TaskCard({
               type="button"
               disabled={busy}
               onClick={() => onComplete(task)}
+              aria-label={`Complete "${task.title}"`}
               className={`${actionClass} bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
             >
               Complete
@@ -107,6 +108,7 @@ export default function TaskCard({
               type="button"
               disabled={busy}
               onClick={() => onEdit(task)}
+              aria-label={`Edit "${task.title}"`}
               className={`${actionClass} bg-slate-100 text-slate-700 hover:bg-slate-200`}
             >
               Edit
@@ -117,6 +119,7 @@ export default function TaskCard({
               type="button"
               disabled={busy}
               onClick={() => onDelete(task)}
+              aria-label={`Delete "${task.title}"`}
               className={`${actionClass} text-red-700 hover:bg-red-50`}
             >
               Delete
