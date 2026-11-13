@@ -37,24 +37,27 @@ I first listed every explicit requirement (CRUD, assignment, completion, filters
 
 **Commit before enqueue (the part I'd highlight in review).** If the API enqueued the Celery job *before* committing, the worker could pick it up before the row exists, or notify about a task whose transaction later rolled back. So repositories only `flush()`, the use case decides when to `commit()` through a Unit of Work port, and the dispatcher is called *after* the commit. A unit test (`test_create_with_assignee_dispatches_after_commit`) pins this order.
 
-The final review raised the other side of this: if Redis is down *after* the commit, the old code returned a 500, so the client would retry and create a duplicate task. Now the request succeeds and the failure is logged (`test_broker_failure_after_commit_does_not_fail_the_request`). Measuring it live also showed a 65-second hang, caused by an unused Celery result backend; removing it brought a dead-broker enqueue down to a few seconds. The remaining gap, a lost notification, is what a **transactional outbox** solves; it is listed as the next step.
+The first review raised the other side of this: if Redis is down *after* the commit, the old code returned a 500, so the client would retry and create a duplicate task. Now the request succeeds and the failure is logged (`test_broker_failure_after_commit_does_not_fail_the_request`). Measuring it live also showed a 65-second hang, caused by an unused Celery result backend; removing it brought a dead-broker enqueue down to a few seconds. The remaining gap, a lost notification, is what a **transactional outbox** solves; it is listed as the next step.
 
 **Sync SQLAlchemy.** FastAPI runs sync endpoints in a thread pool, Celery is sync, and the load is small. Async would add complexity (lazy-loading pitfalls, async fixtures) without a measurable benefit here. The repository ports isolate the choice.
 
 **Dates.** `due_date` is a calendar `date` (a deadline is a day, not an instant), and all timestamps are timezone-aware UTC. SQLite drops timezone info, so a small `UTCDateTime` column type normalises values in and out. A test caught that.
 
-**Security.** Argon2id hashing; the same "invalid credentials" message for unknown email and wrong password; a JWT secret of at least 32 bytes enforced at startup; algorithms pinned when decoding (rejects `alg: none`); 401 responses always carry `WWW-Authenticate: Bearer`; stricter rate limits on login and register; ids validated to the database's integer range (no 500s on overflow); containers run as non-root; no secrets in the repo. The API is reachable only through nginx, which overwrites `X-Forwarded-For` with the real peer address, so per-IP limits cannot be spoofed.
+**Security.** Argon2id hashing; the same "invalid credentials" message *and the same hashing work* for an unknown email and a wrong password (no timing leak); a JWT secret of at least 32 bytes enforced at startup; algorithms pinned when decoding (rejects `alg: none`); 401 responses always carry `WWW-Authenticate: Bearer`; stricter rate limits on login and register; ids validated to the database's integer range (no 500s on overflow); containers run as non-root; no secrets in the repo. The API is reachable only through nginx, which overwrites `X-Forwarded-For` with the real peer address, so per-IP limits cannot be spoofed.
 
-**Rate limiting.** Redis-backed counters shared by every API replica: 100 req/min per IP by default and 5 req/min on login/register. I started with slowapi, but its decorators bind configuration at import time, which fought the app factory and per-test settings. I switched to the library it uses internally (`limits`) behind a small FastAPI dependency.
+**Rate limiting.** Redis-backed counters shared by every API replica: 100 req/min per IP by default, 10/min on login and 5/min on register, in separate buckets so signing up never eats the login budget. I started with slowapi, but its decorators bind configuration at import time, which fought the app factory and per-test settings. I switched to the library it uses internally (`limits`) behind a small FastAPI dependency.
 
 **Frontend state.** Server data lives in TanStack Query (cache and invalidation after mutations), filters and page in the URL, UI state locally, and the session in an `AuthContext`. A 401 anywhere clears the token and returns to the login page. nginx proxies `/api`, so the app and the API share an origin: no CORS and no console warnings.
 
 ## 4. How I worked
 
 1. **Plan first.** I wrote an implementation plan with exact interfaces between layers and the test list for each step, before any code.
-2. **TDD per step.** For each task: write the failing tests, watch them fail for the right reason, implement the minimum, then run the full suite. The git history shows this rhythm in small commits.
+2. **TDD per step, with an AI pair.** Claude Code wrote most of the code; I set the decisions and reviewed. For each task the failing tests were written and run first, then the implementation, then the full suite. Each commit holds one finished task with its tests, so the red/green cycle happened in the session and isn't visible in the commit order (see GENAI.md).
 3. **Gates on every commit.** pre-commit runs ruff (lint + format), mypy (strict) and oxlint. CI repeats them and builds the Docker images.
-4. **Independent review.** A fresh reviewer read the whole branch adversarially. Its findings (integer overflow → 500, broker outage → 500, rate-limit keying, empty page after delete) were each reproduced, fixed test-first and re-verified live. One of them turned out to have a different root cause than reported: a YAML folded block had silently dropped `--proxy-headers`.
+4. **Two independent reviews.** Fresh agents that had not written the code reviewed the branch adversarially.
+   - **First review:** integer overflow → 500, broker outage → 500, rate-limit keying, an empty page after delete. One finding had a different root cause than reported: a YAML folded block had silently dropped `--proxy-headers`.
+   - **Second review:** a login timing leak, two routers bypassing the composition root, a shared login/register rate-limit bucket that would break a demo, and `acks_late` able to duplicate notifications.
+   - Each finding was reproduced, fixed with a test and re-verified. These fixes are separate commits at the end of the history.
 5. **Run the real thing.** After the backend was done, I ran the whole stack in Docker and exercised it end to end: login, assign a task, watch the worker log, see Bob's notification. Then the same in a browser at desktop and 375 px widths, with the console open. This surfaced one issue the tests could not: Celery Beat interval jobs first fire only after one full interval, so I added a scan on beat start-up.
 
 ## 5. Demo script (≈ 10 minutes)
@@ -67,7 +70,7 @@ The final review raised the other side of this: if Redis is down *after* the com
 6. Sign out, sign in as **bob@example.com**: the assignment notification is there. Show the worker log line.
 7. Shrink the browser to phone width. Open DevTools to show a clean console.
 8. Open http://localhost:5173/docs, **Authorize**, and call `GET /tasks` with filters. Show a 422 for an inverted date range.
-9. Run `uv run pytest` to show 117 tests and the coverage report.
+9. Run `uv run pytest` to show 125 tests and the coverage report, or `./scripts/smoke.sh` for the end-to-end check.
 
 ## 6. With more time
 

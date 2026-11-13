@@ -104,7 +104,7 @@ All endpoints are under `/api/v1`, documented at `/docs`. Ids outside `1..2^31-1
 | JWT access token (HS256, 60 min), Argon2id passwords | Meets the JWT requirement with a minimal surface. The secret must be ≥ 32 bytes, enforced at startup. |
 | `limit`/`offset` pagination with `total` | Lets the UI show "page X of Y". Keyset pagination is the path for very large tables. |
 | `due_date` is a calendar `date`, timestamps are UTC | A due date is a day, not an instant. This avoids timezone off-by-one bugs. |
-| Rate limiting via `limits` + Redis | 100 req/min per IP on the API and 5 req/min on login/register. Counters are shared by all API replicas. Implemented as a dependency because slowapi's decorators bind config at import time. |
+| Rate limiting via `limits` + Redis | 100 req/min per IP on the API, 10/min on login and 5/min on register (separate buckets). Counters are shared by all API replicas. Implemented as a dependency because slowapi's decorators bind config at import time. |
 | Celery worker + beat | Assignment notifications are event-driven. Overdue detection is scheduled, skips tasks already notified, and also runs once at startup. There is no result backend, because nobody reads job results. |
 | Tests: fakes for use cases, SQLite for integration | Fast feedback for TDD. Postgres-only behaviour is covered by the Docker run. |
 
@@ -140,17 +140,18 @@ npm run dev        # http://localhost:5173, proxies /api to http://localhost:800
 ## Tests and quality gates
 
 ```bash
-cd backend && uv run pytest          # 117 tests, coverage gate 80% (currently ~97%)
+cd backend && uv run pytest          # 125 tests, coverage gate 80% (currently ~97%)
 cd backend && uv run mypy            # strict mode
 cd backend && uv run ruff check . && uv run ruff format --check .
-cd frontend && npm test -- --run     # Vitest + Testing Library
+cd frontend && npm test -- --run     # 23 tests: Vitest + Testing Library
+./scripts/smoke.sh                   # end-to-end check against a running docker compose stack
 cd frontend && npm run lint && npm run build
 ```
 
 - **Unit tests** (`backend/tests/unit`) cover the domain rules and use cases against in-memory fakes.
 - **Integration tests** (`backend/tests/integration`) cover the repositories, every endpoint, auth edge cases (expired, malformed and orphaned tokens), rate limiting, the Celery job bodies and the seed.
 - **pre-commit** runs ruff, mypy, oxlint and hygiene hooks on every commit: `uv run --project backend pre-commit install`.
-- **GitHub Actions** runs all of the above and builds the Docker images on every push.
+- **GitHub Actions** runs all of the above, applies the migrations on PostgreSQL, then starts the whole compose stack and runs `scripts/smoke.sh` (login, 401/404/422 paths, and a worker-delivered notification).
 
 ---
 
@@ -161,6 +162,10 @@ cd frontend && npm run lint && npm run build
 - If Redis is down when a task is assigned, the task is saved and the failure is logged, but that notification is lost. A transactional outbox would guarantee delivery.
 - The overdue scan avoids duplicates with a check-then-insert, which is safe with the single Beat scheduler used here. A unique index on `(task_id, kind)` would make it race-proof with concurrent scans.
 - SQLite (local dev and tests) does not enforce foreign keys unless enabled, so cascade deletes behave as on PostgreSQL only in Docker.
+- The api container runs migrations and the seed before starting, which is right for one instance. With several replicas, that should move to a one-off job run before the rollout.
 - Notifications use 30-second polling. WebSockets or SSE would make them real-time.
 - "Overdue" uses the UTC date. Per-user timezones would make it exact around midnight.
-- Integration tests run on SQLite. Testcontainers would run them on PostgreSQL in CI.
+- Integration tests run on SQLite; PostgreSQL is covered by the migration check and the end-to-end smoke test in CI. Testcontainers would run the whole suite on PostgreSQL.
+- Registration answers 409 for a taken email, which reveals that the account exists (login does not: same message and same hashing work). It is rate limited; an email-verification flow would remove it.
+- The assignee of a task can edit it, including reassigning it. Edits are last-write-wins; an `updated_at`/ETag check would detect concurrent edits.
+- The assignment notification is at-most-once: if the worker crashes mid-job, that notification is lost rather than duplicated.
