@@ -25,6 +25,7 @@ class RateLimiter:
         self._limits: dict[str, RateLimitItem] = {
             "default": parse(settings.rate_limit_default),
             "login": parse(settings.rate_limit_login),
+            "register": parse(settings.rate_limit_register),
         }
 
     def check(self, scope: str, client_key: str) -> None:

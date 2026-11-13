@@ -16,6 +16,7 @@ def limited_client(session_factory: sessionmaker[Session]) -> Iterator[TestClien
         rate_limit_enabled=True,
         rate_limit_default="8/minute",
         rate_limit_login="5/minute",
+        rate_limit_register="3/minute",
         rate_limit_storage_uri="memory://",
     )
     with TestClient(create_app(settings, session_factory=session_factory)) as client:
@@ -63,7 +64,18 @@ def test_register_uses_strict_limit(limited_client: TestClient) -> None:
             "/api/v1/auth/register",
             json={"email": f"u{i}@example.com", "password": "s3cret-pass", "full_name": "U"},
         ).status_code
-        for i in range(6)
+        for i in range(4)
     ]
 
-    assert statuses == [201] * 5 + [429]
+    assert statuses == [201] * 3 + [429]
+
+
+def test_register_and_login_have_separate_buckets(limited_client: TestClient) -> None:
+    for i in range(3):
+        limited_client.post(
+            "/api/v1/auth/register",
+            json={"email": f"u{i}@example.com", "password": "s3cret-pass", "full_name": "U"},
+        )
+
+    # Signing up must not eat into the login budget (it did when both shared one bucket).
+    assert [bad_login(limited_client) for _ in range(5)] == [401] * 5

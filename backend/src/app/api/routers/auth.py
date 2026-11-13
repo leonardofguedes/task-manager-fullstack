@@ -13,7 +13,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(rate_limit("login"))],
+    dependencies=[Depends(rate_limit("register"))],
 )
 def register(payload: UserRegister, auth: AuthServiceDep) -> UserOut:
     user = auth.register(payload.email, payload.password, payload.full_name)

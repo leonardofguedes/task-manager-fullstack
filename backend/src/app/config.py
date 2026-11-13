@@ -25,7 +25,8 @@ class Settings(InfraSettings):
 
     rate_limit_enabled: bool = True
     rate_limit_default: str = "100/minute"
-    rate_limit_login: str = "5/minute"
+    rate_limit_login: str = "10/minute"
+    rate_limit_register: str = "5/minute"
     rate_limit_storage_uri: str = "memory://"
 
 
